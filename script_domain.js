@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name            控制网页使用限制 单独域名版
 // @namespace       http://tampermonkey.net/
-// @version         0.4
+// @version         0.5
 // @description     可以记录在不同的网站的使用时间，设置每个网站的可用时间，如果到达了指定的时间，页面会被遮挡而无法正常
-// @author          You
+// @author          lavaf
 // @match 		    https://*/*
 // @match		    http://*/*
 // @grant           GM.setValue
@@ -63,7 +63,7 @@
                 }));
             }
         } catch (e) {
-            console.log(log_key, 'error in try-catch', e)
+            console.log(log_key, 'error in try-catch getData', e)
         }
         return null;
     }
@@ -87,7 +87,7 @@
                 }
             }
         } catch (e) {
-            console.log(log_key, 'error in try-catch', e)
+            console.log(log_key, 'error in try-catch getOtherData', e)
         }
         return null;
     }
@@ -162,13 +162,13 @@
 
     async function initUsage() {
         usage = await getUsage();
-        console.log(log_key, 'after initUsage usage:', usage);
+        //console.log(log_key, 'after initUsage usage:', usage);
     }
 
     //endregion function data
     let message = "web_page_usage_init";
     if (window.top !== window.self) {
-        console.log(message,"Current environment is frame")
+        //console.log(message,"Current environment is frame")
         return ;
     }
     console.log("Web page usage start...");
@@ -176,15 +176,15 @@
 
     //region init key-url
     let current_h_href = location.href;
-    console.log(message, "current_h_href", current_h_href);
+    //console.log(message, "current_h_href", current_h_href);
     let reg = new RegExp(/^(?:(?:ftp|http[s]?)?:\/\/)?(?:[\dA-Za-z-]+\.)+[\dA-Za-z-]+(?::[\d]{1,4})*/);
     let reg_localhost = new RegExp(/^(?:(?:ftp|http[s]?)?:\/\/)?localhost(?::[\d]{1,4})*/);
     let result = reg.exec(current_h_href);
     if (result == null) {
-        console.log(message, 'reg 不匹配');
+        //console.log(message, 'reg 不匹配');
         result = reg_localhost.exec(current_h_href);
         if (result == null) {
-            console.log(message, "result is null");
+            //console.log(message, "result is null");
             return
         }
     }
@@ -196,13 +196,13 @@
     //endregion key-url
     await initUsage();
     if (usage === undefined) {
-        console.log(log_key, "usage is null");
+        //console.log(log_key, "usage is null");
         usage = {};
     }
     let statistics_data = usage.statistics;
     let restrict_data = usage.restrict;
     let current_statistics = getDomainStatisticsTimeObject(statistics_data.data, current_domain);
-    console.log(log_key, 'current_statistics', current_statistics);
+    //console.log(log_key, 'current_statistics', current_statistics);
     //region ui
     let manager_panel = $("<div>", {id: "web_page_usage_manager_panel_id", 'translate': 'no'});
     manager_panel.appendTo('body');
@@ -281,7 +281,7 @@
 			</div>
 			<button id="addButton" class="notranslate" translate="no">保存总时长使用限制</button>
 			<div>
-			    <label for="add_input_single_limit">单次使用限制</label>
+			    <label for="add_input_single_limit">single:</label>
 			    <input type="number" id="add_input_single_limit">
             </div>
             <button id="save_single_limit" class="notranslate" translate="no">保存单次使用限制</button>
@@ -305,20 +305,20 @@
     saveButton.click(async function () {
         //获取input 中的内容
         let url = input_url.val();
-        console.log("添加限制", url, input_limit.val());
+        //console.log("添加限制", url, input_limit.val());
         let limit = parseInt(input_limit.val());
         // noinspection JSValidateTypes
         restrict_data.limit = limit;
-        console.log(log_key, "保存", limit, restrict_data);
+        //console.log(log_key, "保存", limit, restrict_data);
         await saveData();
 
         if (getCurrentRestrict(url) == null) {
-            console.log(log_key, "limit添加成功");
+            //console.log(log_key, "limit添加成功");
             startTimer();
             printList();
             curtain.hide();
         } else {
-            console.log(log_key, 'limit更新时间');
+            //console.log(log_key, 'limit更新时间');
         }
     });
     let saveSingleButton = $("#save_single_limit");
@@ -516,7 +516,7 @@
 
     //endregion start timer
     function addPrintTimer() {
-        console.log(log_key, 'addPrintTimer called');
+        //console.log(log_key, 'addPrintTimer called');
         printTimer = setInterval(async function () {
             let child = statistics_ol.children();
             for (let j = 0; j < child.length; j++) {
@@ -551,7 +551,7 @@
      * 监听当前页面
      */
     function addStatisticTimer() {
-        console.log(log_key, 'addStatisticTimer called');
+        //console.log(log_key, 'addStatisticTimer called');
         statisticsTimer = setInterval(async function () {
             // console.log(log_key, "over-all called");
             current_statistics.time++;
@@ -565,13 +565,13 @@
                 button.animate({'opacity': 1}, '500');
             }
             if (show) {
-                currentSecond.text(current_statistics.time % 60);
+                currentSecond.text(current_statistics.time % 60+" "+(counter));
             }
         }, 1000);
     }
 
     function stopTimer() {
-        console.log(log_key, 'stopTimer called');
+        //console.log(log_key, 'stopTimer called');
         if (statisticsTimer != null)
             clearInterval(statisticsTimer);
         if (checkTimer != null) {
@@ -583,7 +583,7 @@
      * 检测当前页面是否超时
      */
     function addCheckRestrictTimer() {
-        console.log(log_key, "addCheckRestrictTimer called");
+        //console.log(log_key, "addCheckRestrictTimer called");
         checkTimer = setInterval(function () {
             if (restrict_data.limit != null) {
                 if (current_statistics.time >= restrict_data.limit) {
@@ -701,7 +701,7 @@
         let data = await getUsage();
         // console.log(log_key, 'data:', data);
         if (data == null) {
-            console.log(log_key, 'saveData failed due to getData failed');
+            //console.log(log_key, 'saveData failed due to getData failed');
             return null;
         } else {
             let remote = getTodayStatisticsTimeObject(data);
@@ -754,7 +754,7 @@
             }
         }
         if (j === dataSource.length) {
-            console.log(log_key, "新建当天统计对象", domain);
+            //console.log(log_key, "新建当天统计对象", domain);
             let date = new Date();
             let current_statistics = {
                 "year": date.getFullYear(),
@@ -769,13 +769,13 @@
 
     window.addEventListener("visibilitychange", async function () {
         if (document.visibilityState === "visible") {
-            console.log(log_key, "visible");
+            //console.log(log_key, "visible");
             await initUsage();
             if (usage === undefined) {
-                console.log(log_key, "usage is undefined");
+                //console.log(log_key, "usage is undefined");
                 usage = {};
             } else {
-                console.log(log_key, "usage isn't undefined");
+                //console.log(log_key, "usage isn't undefined");
             }
             statistics_data = usage.statistics;
             restrict_data = usage.restrict;
@@ -783,22 +783,23 @@
             current_statistics = getDomainStatisticsTimeObject(statistics_data.data, current_domain);
             // current_statistics = getDomainStatisticsTimeObject(statistics_data.data, current_domain);
             if (restrict_data.limit == null) {
-                console.log(log_key, "addStatisticTimer currentRestrict is null");
+                //console.log(log_key, "addStatisticTimer currentRestrict is null");
             } else {
-                console.log(log_key, 'current:', current_statistics.time, 'limit:', restrict_data.limit);
+                //console.log(log_key, 'current:', current_statistics.time, 'limit:', restrict_data.limit);
                 if (current_statistics.time >= restrict_data.limit) {
-                    console.log(log_key, "已经超时，不在启动计时");
+                    //console.log(log_key, "已经超时，不在启动计时");
                     curtain.show();
                     return
                 }
             }
             startTimer();
         } else {
-            console.log(log_key, "invisible");
+            //console.log(log_key, "invisible");
             //暂停计时更能
             stopTimer();
         }
     });
+    //测试功能
     document.body.onfullscreenchange=function (ev) {
         console.log(ev)
     }
