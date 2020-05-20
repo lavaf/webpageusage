@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            控制网页使用限制 单独域名版
 // @namespace       http://tampermonkey.net/
-// @version         0.5
+// @version         0.6
 // @description     可以记录在不同的网站的使用时间，设置每个网站的可用时间，如果到达了指定的时间，页面会被遮挡而无法正常
 // @author          lavaf
 // @match 		    https://*/*
