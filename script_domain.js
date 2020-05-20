@@ -96,8 +96,10 @@
      *
      * @returns {Promise<void>}
      */
-    async function saveData() {
-        await remedyTimeDiff();
+    async function saveData(remedy=true) {
+        // console.log(log_key, "savedData called")
+        if (remedy)
+            await remedyTimeDiff();
 
         let value = JSON.stringify(usage);
         try {
@@ -129,18 +131,30 @@
     }
 
     /**
+     * 新建一个对象
+     * @return {{restrict: {single: undefined, domain, limit: undefined, interval: undefined}, statistics: {single: {date: undefined, time: number}|null, data: [], domain}}}
+     */
+    function newObject() {
+        return {
+            'restrict': {'domain': current_domain, 'limit': undefined, single: undefined, "interval": undefined},
+            'statistics': {
+                'domain': current_domain,
+                'data': [],
+                "single": {'time': 0, "date": undefined}
+            }
+        };
+    }
+
+    /**
      * 获取数据，解析成json对象
      * @return {{'restrict':{'domain':String,'limit':Number,'single':Number},statistics:{'domain':String,'data':[{year:Number,month:Number,day:Number,time:Number}]}}}
      */
-    async function getUsage(save) {
+    async function getUsage(save=false) {
         let data = await getData();
         // console.log(log_key, 'data:', data);
         if (data == null) {
             // console.log(log_key, "initUsage", "getData return null");
-            let usage = {
-                'restrict': {'domain': current_domain, 'limit': undefined, single: undefined},
-                'statistics': {'domain': current_domain, 'data': []}
-            };
+            let usage = newObject();
             if (save)
                 await saveData();
             return usage;
@@ -148,10 +162,7 @@
             let parse = JSON.parse(data);
             if (parse.restrict === undefined || parse.statistics === undefined) {
                 console.log(log_key, 'script data is null');
-                let usage = {
-                    'restrict': {'domain': current_domain, 'limit': undefined, single: undefined},
-                    'statistics': {'domain': current_domain, 'data': []}
-                };
+                let usage = newObject();
                 if (save)
                     await saveData();
                 return usage;
@@ -169,7 +180,7 @@
     let message = "web_page_usage_init";
     if (window.top !== window.self) {
         //console.log(message,"Current environment is frame")
-        return ;
+        return;
     }
     console.log("Web page usage start...");
 
@@ -220,11 +231,14 @@
 
     //region statistics
     let statistics_panel = $('<div>');
-    let statistics_ol = $('<ol>', {id: "statistics-ol"});
+    let totalTimeWasteLabel = $("<p>");
+    totalTimeWasteLabel.appendTo(statistics_panel);
+    let statistics_ol = $('<ol>', {id: "web-page-usage-statistics-ol"});
     statistics_ol.css({'height': "100px", 'overflow-y': 'scroll'});
     statistics_ol.appendTo(statistics_panel);
     let currentSecond = $("<span>");
     currentSecond.appendTo(statistics_panel);
+    currentSecond.title = "当前计算时间的秒数 当前页面从打开直到现在的秒数"
     let clear_data_button = $("<button>");
     clear_data_button.text("clear");
     clear_data_button.click(async function () {
@@ -235,8 +249,7 @@
         statistics_data = usage.statistics;
         restrict_data = usage.restrict;
         current_statistics = getDomainStatisticsTimeObject(statistics_data.data, current_domain);
-        addStatisticTimer();
-        addCheckRestrictTimer();
+        startTimer();
     });
     clear_data_button.appendTo(statistics_panel);
 
@@ -249,16 +262,18 @@
         manager_panel.css('color', 'black');
     }
     //region dialog
-    let dialog = $("<div>", {id: 'usage-dialog'});
-    dialog.css("display",'none')
+    let dialog = $("<div>", {id: 'web-page-usage-usage-dialog'});
+    dialog.css("display", 'none')
     let dialog_ol = $("<ol>");
     dialog_ol.appendTo(dialog);
     dialog.appendTo('body');
     //endregion dialog
     //region restrictPanel
-    let restrictPanelString = `<div id="restrictPanel">
-        <div id="top"></div>
-        <div id="center"><button id="view" class="notranslate" translate="no">查看数据</button></div>
+    let restrictPanelString = `<div id="web-page-usage-restrictPanel">
+        <div id="web-page-usage-top"></div>
+        <div id="web-page-usage-center">
+            <button id="web-page-usage-view" class="notranslate" translate="no">查看数据</button>
+        </div>
     </div>`;
     let restrictPanel = $($.parseHTML(restrictPanelString));
     let dialog_string =
@@ -269,7 +284,7 @@
     singleDialog.css('display', 'none');
     singleDialog.appendTo('body');
     restrictPanel.appendTo(manager_panel);
-    let top = $('div#top');
+    let top = $('div#web-page-usage-top');
     let input_string = `<div style="display: block">
 			<div>
 				<label for="add_input_data">url:</label>
@@ -279,12 +294,17 @@
 				<label for="add_input_limit_time">time:</label>
 				<input type="number" id="add_input_limit_time">
 			</div>
-			<button id="addButton" class="notranslate" translate="no">保存总时长使用限制</button>
+			<button id="addButton">保存总时长使用限制</button>
 			<div>
 			    <label for="add_input_single_limit">single:</label>
 			    <input type="number" id="add_input_single_limit">
             </div>
-            <button id="save_single_limit" class="notranslate" translate="no">保存单次使用限制</button>
+            <button id="save_single_limit">保存单次使用限制</button>
+            <div>
+                <label for="add_input_time_interval">interval:</label>
+                <input id="add_input_time_interval" type="number">
+            </div>
+            <button id="save_single_interval">保存单次使用间隔</button>
 		</div>`;
 
     let input_div = $($.parseHTML(input_string));
@@ -296,12 +316,7 @@
     input_limit.val(restrict_data.limit);
     let inputSingleLimit = $("#add_input_single_limit");
     inputSingleLimit.val(restrict_data.single);
-
-    function startTimer() {
-        addStatisticTimer();
-        addCheckRestrictTimer();
-    }
-
+    let saveSingleInterval=$("#save_single_interval")
     saveButton.click(async function () {
         //获取input 中的内容
         let url = input_url.val();
@@ -323,12 +338,16 @@
     });
     let saveSingleButton = $("#save_single_limit");
     saveSingleButton.click(async function () {
-        clearInterval(statisticsTimer);
-        clearInterval(checkTimer);
+        stopTimer();
         //获取input 中的内容
         let url = input_url.val();
         // noinspection JSValidateTypes
-        restrict_data.single = parseInt(inputSingleLimit.val());
+        let single = parseInt(inputSingleLimit.val());
+        if (single === -1) {
+            restrict_data.single = undefined;
+        } else {
+            restrict_data.single = single;
+        }
         await saveData();
         startTimer();
         printList();
@@ -338,8 +357,21 @@
             console.log(log_key, 'single更新时间');
         }
     });
+    let interval=$("#add_input_time_interval")
+    saveSingleInterval.click(async function () {
+        stopTimer();
+        let interval1 = parseInt(interval.val());
+        if (interval1 === -1) {
+            restrict_data.interval = undefined;
+        } else {
+            restrict_data.interval= interval1;
+        }
+        await saveData();
+        startTimer();
+        printList();
+    })
     // let center = $('div#center');
-    let viewStatisticsButton = $('button#view');
+    let viewStatisticsButton = $('button#web-page-usage-view');
     viewStatisticsButton.click(async function () {
         dialog_ol.children().remove();
         let list = await getList();
@@ -417,11 +449,11 @@
         clearInterval(statisticsTimer);
     });
     let bottom = $('<div>', {
-        "id": "bottom"
+        "id": "web-page-usage-bottom"
     });
     bottom.css({'height': "100px"});
     let ol = $("<ol>", {
-        id: 'restrictPanel-ol'
+        id: 'web-page-usage-restrictPanel-ol'
     });
     ol.appendTo(bottom);
     bottom.appendTo(restrictPanel);
@@ -442,11 +474,16 @@
             li.text(restrict_data['domain'] + " single:" + format(restrict_data.single) + " " + restrict_data.single + "s");
             li.appendTo(ol)
         }
+        if (restrict_data.interval != null) {
+            let li=$("<li>")
+            li.text(restrict_data['domain'] + " interval:" + format(restrict_data.interval) + " " + restrict_data.interval + "s")
+            li.appendTo(ol);
+        }
     }
 
     //region button
     let button = $('<button>', {
-        id: 'toggle',
+        id: 'web-page-usage-toggle',
         text: '打开',
         'translate': 'no',
         'class': 'notranslate'
@@ -463,8 +500,13 @@
         if (!show) {
             let top = button.css('top');
             let height = button.css('height');
+            let height2 = innerHeight;
+            let left = button.css('width')
             // console.log(log_key,'showOrHide',top,height);
-            manager_panel.css('top', parseInt(top) + parseInt(height));
+            manager_panel.css('left', left);
+            let height3 = parseInt(manager_panel.css('height'));
+            console.log(log_key, "height2", height2, "height3", height3)
+            manager_panel.css('top', (height2 - height3) / 2);
             manager_panel.show();
             show = true;
         } else {
@@ -505,16 +547,35 @@
     curtain.appendTo('body');
     curtain.hide();
     showOrHide();
+    if (restrict_data.interval != null) {
+        let currentDate = new Date();
+        let lastDate =new Date(statistics_data.single.date) ;
+        console.log(log_key,"current",currentDate,"last",lastDate)
+        let m = (currentDate - lastDate) / 1000;
+        console.log(log_key, "差", m);
+        if (m < restrict_data.interval) {
+            reachTimeLimit();
+            curtain.text("超时,请等待" + format(restrict_data.interval));
+            console.log(log_key, "请等待一段时间之后");
+            return;
+        } else {
+            statistics_data.single.time=0;
+            statistics_data.single.date=new Date();
+            await saveData(false);
+        }
+    }
     //endregion ui
     //region start timer
     let statisticsTimer;
     let checkTimer;
     let counter = 0;
-    addStatisticTimer();
-    addCheckRestrictTimer();
+    startTimer();
     let printTimer;
 
     //endregion start timer
+    /**
+     * 获取已经添加到ol列表中的域名，然后从数据中获取当天的消息，然后打印出来，只会做已经打印出来的，后面添加的消息不会处理，除非重新打开
+     */
     function addPrintTimer() {
         //console.log(log_key, 'addPrintTimer called');
         printTimer = setInterval(async function () {
@@ -556,6 +617,12 @@
             // console.log(log_key, "over-all called");
             current_statistics.time++;
             counter++;
+            if (statistics_data.single == null) {
+                alert("版本问题，需要卸载当前脚本，重新安装")
+            } else {
+                statistics_data.single.time++;
+                statistics_data.single.date = new Date();
+            }
             await saveData();
             let current = format(current_statistics.time);
             if (button.text() !== current)
@@ -565,51 +632,59 @@
                 button.animate({'opacity': 1}, '500');
             }
             if (show) {
-                currentSecond.text(current_statistics.time % 60+" "+(counter));
+                currentSecond.text(current_statistics.time % 60 + " " + (counter));
             }
         }, 1000);
     }
 
-    function stopTimer() {
-        //console.log(log_key, 'stopTimer called');
-        if (statisticsTimer != null)
-            clearInterval(statisticsTimer);
-        if (checkTimer != null) {
-            clearInterval(checkTimer);
-        }
+    function reachTimeLimit() {
+        curtain.show();
+        stopTimer();
     }
-
     /**
      * 检测当前页面是否超时
      */
     function addCheckRestrictTimer() {
         //console.log(log_key, "addCheckRestrictTimer called");
         checkTimer = setInterval(function () {
+
             if (restrict_data.limit != null) {
                 if (current_statistics.time >= restrict_data.limit) {
                     console.log(log_key, "超时");
+                    curtain.text("超过设定的"+format(restrict_data.limit)+"限制")
                     // GM_notification(current_domain+"超时了",function () {
                     //     window.close();
                     // })
-                    curtain.show();
-                    stopTimer();
+                    reachTimeLimit();
                     return;
                 }
             }
-            if (restrict_data.single !== undefined && counter >= restrict_data.single) {
-                curtain.show();
-                stopTimer();
+            //console.log(log_key, "restirct single", restrict_data.single, "statistics single", statistics_data.single.time)
+            if (restrict_data.single !== undefined && statistics_data.single.time >= restrict_data.single) {
+                console.log(log_key, "到达连续使用限制");
+                reachTimeLimit();
+                curtain.text("超过连续使用限制" + format(restrict_data.single));
                 singleDialog.dialog({
                     resizable: false,
                     height: "auto",
                     width: 400,
                     modal: true,
                     buttons: {
-                        "continue": function () {
-                            counter = 0;
-                            $(this).dialog("close");
-                            curtain.hide();
-                            startTimer();
+                        "continue": async function () {
+                            console.log(log_key,'interval',restrict_data.interval);
+                            if (restrict_data.interval != null) {
+                                window.close();
+                            } else {
+                                $(this).dialog("close");
+                                curtain.hide();
+                                statistics_data.single.time = 0;
+                                statistics_data.single.date = new Date();
+                                //console.log(log_key, "restrict single", restrict_data.single, "statistics single", statistics_data.single.time)
+                                await saveData(false);
+                                //console.log(log_key, "restrict single", restrict_data.single, "statistics single", statistics_data.single.time)
+                                startTimer();
+                            }
+
                         },
                         'close': function () {
                             $(this).dialog("close");
@@ -630,26 +705,43 @@
 
     }
 
+    function startTimer() {
+        console.log(log_key, "startTimer called");
+        addStatisticTimer();
+        addCheckRestrictTimer();
+    }
+
+    function stopTimer() {
+        //console.log(log_key, 'stopTimer called');
+        if (statisticsTimer != null)
+            clearInterval(statisticsTimer);
+        if (checkTimer != null) {
+            clearInterval(checkTimer);
+        }
+    }
+
     async function printToday() {
         statistics_ol.children().remove();
         let list = await getList();
+        let total = 0;
         for (let i = 0; i < list.length; i++) {
             let temp = await getOtherData(list[i]);
             // console.log(log_key, 'printToday:temp:', temp);
             if (temp.statistics === undefined || temp.restrict === undefined) {
                 continue;
             }
-            let domain_item = temp.statistics.domain;
+            let domainName = temp.statistics.domain;
             let today = getTodayStatisticsTimeObject(temp);
             if (today == null) {
                 continue;
             }
-            let todayElement = today.time;
-            let currentTime = format(todayElement);
+            let todayTime = today.time;
+            total += todayTime;
+            let currentTimeString = format(todayTime);
             let li_string =
                 `<li id="li-${i}" style="padding: 5px">
-                    <span style="margin-right: 50px">${domain_item}</span>
-                    <span style="float: right">${currentTime}</span>
+                    <span style="margin-right: 50px">${domainName}</span>
+                    <span style="float: right">${currentTimeString}</span>
                 </li>`;
             let item_li = $($.parseHTML(li_string));
             /**
@@ -659,7 +751,7 @@
             let position = null;
             for (let y = 0; y < statistics_ol.children().length; y++) {
                 let $1 = $(statistics_ol.children().get(y));
-                if (parseInt($1.attr('data-time')) < todayElement) {
+                if (parseInt($1.attr('data-time')) < todayTime) {
                     position = $1;
                     break;
                 }
@@ -669,9 +761,10 @@
             } else
                 // ol_div.appendTo(dialog_ol);
                 item_li.appendTo(statistics_ol);
-            item_li.attr('data-time', todayElement);
-            item_li.attr('title', todayElement)
+            item_li.attr('data-time', todayTime);
+            item_li.attr('title', todayTime)
         }
+        totalTimeWasteLabel.text("今天所有的网页的时间总和:" + format(total))
     }
 
     function format(time) {
@@ -710,6 +803,13 @@
             }
             if (remote.time > current_statistics.time) {
                 current_statistics.time += (remote.time - current_statistics.time);
+            }
+            let single = data.statistics.single;
+            if (data == null) {
+                return;
+            }
+            if (single.time > statistics_data.single.time) {
+                statistics_data.single.time += (single.time - statistics_data.single.time);
             }
         }
     }
@@ -770,6 +870,7 @@
     window.addEventListener("visibilitychange", async function () {
         if (document.visibilityState === "visible") {
             //console.log(log_key, "visible");
+            //重新获取了数据
             await initUsage();
             if (usage === undefined) {
                 //console.log(log_key, "usage is undefined");
@@ -800,7 +901,7 @@
         }
     });
     //测试功能
-    document.body.onfullscreenchange=function (ev) {
+    document.body.onfullscreenchange = function (ev) {
         console.log(ev)
     }
 })();
